@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { setupSocketHandlers } from './socket/handlers';
+import { setupSocketHandlers } from './socket/handlers.js';
 import type { ClientToServerEvents, ServerToClientEvents } from '@category-clash/shared';
 
 const app = express();
@@ -10,9 +10,15 @@ app.use(cors());
 app.use(express.json());
 
 const httpServer = createServer(app);
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://category-clash.vercel.app',
+  process.env.CLIENT_URL
+].filter(Boolean);
+
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: allowedOrigins,
     methods: ['GET', 'POST']
   }
 });

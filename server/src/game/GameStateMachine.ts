@@ -5,8 +5,8 @@ import {
   CategoryBattleState,
   GAME_CONSTANTS
 } from '@category-clash/shared';
-import { TriviaService } from '../services/TriviaService';
-import { CategoryService } from '../services/CategoryService';
+import { TriviaService } from '../services/TriviaService.js';
+import { CategoryService } from '../services/CategoryService.js';
 
 export class GameStateMachine {
   private triviaService: TriviaService;

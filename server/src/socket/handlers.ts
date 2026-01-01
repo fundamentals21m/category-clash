@@ -5,8 +5,8 @@ import {
   GamePhase,
   GAME_CONSTANTS
 } from '@category-clash/shared';
-import { RoomManager } from '../game/RoomManager';
-import { GameStateMachine } from '../game/GameStateMachine';
+import { RoomManager } from '../game/RoomManager.js';
+import { GameStateMachine } from '../game/GameStateMachine.js';
 
 export function setupSocketHandlers(
   io: Server<ClientToServerEvents, ServerToClientEvents>
@@ -201,7 +201,7 @@ export function setupSocketHandlers(
           return;
         }
 
-        const player = room.players.find((p) => p?.id === socket.id);
+        const player = room.players.find((p): p is NonNullable<typeof p> => p?.id === socket.id);
         if (player) {
           io.to(room.roomCode).emit(
             'player-ready-changed',
