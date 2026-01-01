@@ -10,11 +10,13 @@ app.use(cors());
 app.use(express.json());
 
 const httpServer = createServer(app);
-const allowedOrigins = [
+const allowedOrigins: string[] = [
   'http://localhost:5173',
-  'https://category-clash.vercel.app',
-  process.env.CLIENT_URL
-].filter(Boolean);
+  'https://category-clash.vercel.app'
+];
+if (process.env.CLIENT_URL) {
+  allowedOrigins.push(process.env.CLIENT_URL);
+}
 
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: {
