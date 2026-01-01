@@ -12,7 +12,9 @@ app.use(express.json());
 const httpServer = createServer(app);
 const allowedOrigins: string[] = [
   'http://localhost:5173',
-  'https://category-clash.vercel.app'
+  'https://category-clash.vercel.app',
+  'https://categoryclash.com',
+  'https://www.categoryclash.com'
 ];
 if (process.env.CLIENT_URL) {
   allowedOrigins.push(process.env.CLIENT_URL);
