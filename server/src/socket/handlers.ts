@@ -7,13 +7,145 @@ import {
 } from '@category-clash/shared';
 import { RoomManager } from '../game/RoomManager.js';
 import { GameStateMachine } from '../game/GameStateMachine.js';
+import { CpuPlayerService } from '../services/CpuPlayerService.js';
+import { CategoryService } from '../services/CategoryService.js';
 
 export function setupSocketHandlers(
   io: Server<ClientToServerEvents, ServerToClientEvents>
 ) {
   const roomManager = new RoomManager();
   const gameStateMachine = new GameStateMachine();
+  const categoryService = new CategoryService();
+  const cpuPlayerService = new CpuPlayerService(categoryService);
   const roundTimers = new Map<string, NodeJS.Timeout>();
+  const cpuTimers = new Map<string, NodeJS.Timeout>();
+
+  const CPU_PLAYER_ID = 'CPU_PLAYER';
+
+  // ========== CPU Helper Functions ==========
+
+  function clearCpuTimer(roomCode: string) {
+    const timer = cpuTimers.get(roomCode);
+    if (timer) {
+      clearTimeout(timer);
+      cpuTimers.delete(roomCode);
+    }
+  }
+
+  function scheduleCpuTriviaAnswer(roomCode: string) {
+    const room = roomManager.getRoom(roomCode);
+    if (!room || !roomManager.isCpuGame(room)) return;
+    if (room.phase !== GamePhase.TRIVIA || !room.triviaState) return;
+
+    clearCpuTimer(roomCode);
+
+    const delay = cpuPlayerService.getResponseDelay();
+    const timer = setTimeout(async () => {
+      const currentRoom = roomManager.getRoom(roomCode);
+      if (!currentRoom || currentRoom.phase !== GamePhase.TRIVIA) return;
+      if (!currentRoom.triviaState) return;
+
+      const question = currentRoom.triviaState.question;
+      const cpuAnswer = cpuPlayerService.getCpuTriviaAnswer(
+        question.correctAnswer,
+        question.allAnswers
+      );
+
+      const { bothAnswered } = gameStateMachine.processTriviaAnswer(
+        currentRoom,
+        CPU_PLAYER_ID,
+        cpuAnswer
+      );
+
+      io.to(roomCode).emit('trivia-answer-submitted', CPU_PLAYER_ID);
+
+      if (bothAnswered) {
+        clearRoundTimer(roomCode);
+        await resolveTriviaAndAdvance(roomCode);
+      }
+    }, delay);
+
+    cpuTimers.set(roomCode, timer);
+  }
+
+  function scheduleCpuCategoryItem(roomCode: string) {
+    const room = roomManager.getRoom(roomCode);
+    if (!room || !roomManager.isCpuGame(room)) return;
+    if (room.phase !== GamePhase.CATEGORY_BATTLE || !room.categoryState) return;
+    if (room.categoryState.currentTurnPlayerId !== CPU_PLAYER_ID) return;
+
+    clearCpuTimer(roomCode);
+
+    const delay = cpuPlayerService.getResponseDelay();
+    const timer = setTimeout(async () => {
+      const currentRoom = roomManager.getRoom(roomCode);
+      if (!currentRoom || currentRoom.phase !== GamePhase.CATEGORY_BATTLE) return;
+      if (!currentRoom.categoryState) return;
+      if (currentRoom.categoryState.currentTurnPlayerId !== CPU_PLAYER_ID) return;
+
+      const category = currentRoom.categoryState.category;
+      const usedItems = currentRoom.categoryState.usedItems.map(i => i.value);
+      const cpuItem = cpuPlayerService.getCpuCategoryItem(category, usedItems);
+
+      if (!cpuItem) {
+        // CPU passes
+        const result = gameStateMachine.processCategoryItem(
+          currentRoom,
+          CPU_PLAYER_ID,
+          '__PASS__'
+        );
+
+        io.to(roomCode).emit('category-item-result', {
+          item: '[PASS]',
+          playerId: CPU_PLAYER_ID,
+          isValid: false,
+          pointChange: 0
+        });
+
+        if (result.roundEnded) {
+          clearRoundTimer(roomCode);
+          io.to(roomCode).emit('category-end', result.winnerId!, 'pass');
+          await advanceGame(roomCode);
+        } else {
+          clearRoundTimer(roomCode);
+          io.to(roomCode).emit('turn-change', currentRoom.categoryState!.currentTurnPlayerId);
+          io.to(roomCode).emit('game-state-update', currentRoom);
+          startRoundTimer(roomCode, GAME_CONSTANTS.CATEGORY_TURN_TIME);
+        }
+      } else {
+        // CPU submits an item
+        const result = gameStateMachine.processCategoryItem(
+          currentRoom,
+          CPU_PLAYER_ID,
+          cpuItem
+        );
+
+        io.to(roomCode).emit('category-item-result', {
+          item: cpuItem,
+          playerId: CPU_PLAYER_ID,
+          isValid: result.isValid,
+          pointChange: result.pointChange
+        });
+
+        if (result.roundEnded) {
+          clearRoundTimer(roomCode);
+          io.to(roomCode).emit('category-end', result.winnerId!, result.reason || 'invalid');
+          await advanceGame(roomCode);
+        } else {
+          clearRoundTimer(roomCode);
+          io.to(roomCode).emit('turn-change', currentRoom.categoryState!.currentTurnPlayerId);
+          io.to(roomCode).emit('game-state-update', currentRoom);
+          startRoundTimer(roomCode, GAME_CONSTANTS.CATEGORY_TURN_TIME);
+          // If it's still CPU's turn (shouldn't happen with valid items), schedule again
+          if (currentRoom.categoryState!.currentTurnPlayerId === CPU_PLAYER_ID) {
+            scheduleCpuCategoryItem(roomCode);
+          }
+        }
+      }
+    }, delay);
+
+    cpuTimers.set(roomCode, timer);
+  }
 
   // ========== Timer Management ==========
 
@@ -75,6 +207,12 @@ export function setupSocketHandlers(
         );
         io.to(roomCode).emit('game-state-update', room);
         startRoundTimer(roomCode, GAME_CONSTANTS.CATEGORY_TURN_TIME);
+
+        // Schedule CPU category item if it's now CPU's turn
+        if (roomManager.isCpuGame(room) &&
+            room.categoryState!.currentTurnPlayerId === CPU_PLAYER_ID) {
+          scheduleCpuCategoryItem(roomCode);
+        }
       }
     }
   }
@@ -114,6 +252,12 @@ export function setupSocketHandlers(
         updatedRoom.categoryState!.currentTurnPlayerId
       );
       startRoundTimer(roomCode, GAME_CONSTANTS.CATEGORY_TURN_TIME);
+
+      // Schedule CPU category item if it's CPU's turn
+      if (roomManager.isCpuGame(updatedRoom) &&
+          updatedRoom.categoryState!.currentTurnPlayerId === CPU_PLAYER_ID) {
+        scheduleCpuCategoryItem(roomCode);
+      }
     }, 3000); // 3 second delay to show results
   }
 
@@ -136,14 +280,22 @@ export function setupSocketHandlers(
 
     // Advance to next round (trivia) after a delay
     setTimeout(async () => {
-      gameStateMachine.advanceToNextRound(room);
-      const updatedRoom = await gameStateMachine.startTriviaRound(room);
+      const currentRoom = roomManager.getRoom(roomCode);
+      if (!currentRoom) return;
+
+      gameStateMachine.advanceToNextRound(currentRoom);
+      const updatedRoom = await gameStateMachine.startTriviaRound(currentRoom);
       io.to(roomCode).emit('game-state-update', updatedRoom);
       io.to(roomCode).emit(
         'trivia-question',
         updatedRoom.triviaState!.question
       );
       startRoundTimer(roomCode, GAME_CONSTANTS.TRIVIA_TIME_LIMIT);
+
+      // Schedule CPU trivia answer if it's a CPU game
+      if (roomManager.isCpuGame(updatedRoom)) {
+        scheduleCpuTriviaAnswer(roomCode);
+      }
     }, 3000);
   }
 
@@ -190,6 +342,35 @@ export function setupSocketHandlers(
       } catch (error) {
         console.error('Error joining room:', error);
         socket.emit('error', 'Failed to join room');
+      }
+    });
+
+    socket.on('create-cpu-game', async (playerName) => {
+      try {
+        const gameState = roomManager.createCpuGame(socket.id, playerName);
+        socket.join(gameState.roomCode);
+        socket.emit('room-created', gameState.roomCode);
+        socket.emit('game-state-update', gameState);
+        console.log(`CPU game ${gameState.roomCode} created by ${playerName}`);
+
+        // Auto-start the game after a short delay
+        setTimeout(async () => {
+          const room = roomManager.getRoom(gameState.roomCode);
+          if (!room) return;
+
+          console.log(`CPU game starting in room ${room.roomCode}`);
+          const updatedRoom = await gameStateMachine.startGame(room);
+          io.to(room.roomCode).emit('game-state-update', updatedRoom);
+          io.to(room.roomCode).emit(
+            'trivia-question',
+            updatedRoom.triviaState!.question
+          );
+          startRoundTimer(room.roomCode, GAME_CONSTANTS.TRIVIA_TIME_LIMIT);
+          scheduleCpuTriviaAnswer(room.roomCode);
+        }, 1000);
+      } catch (error) {
+        console.error('Error creating CPU game:', error);
+        socket.emit('error', 'Failed to create CPU game');
       }
     });
 
@@ -310,6 +491,12 @@ export function setupSocketHandlers(
           );
           io.to(room.roomCode).emit('game-state-update', room);
           startRoundTimer(room.roomCode, GAME_CONSTANTS.CATEGORY_TURN_TIME);
+
+          // Schedule CPU category item if it's now CPU's turn
+          if (roomManager.isCpuGame(room) &&
+              room.categoryState!.currentTurnPlayerId === CPU_PLAYER_ID) {
+            scheduleCpuCategoryItem(room.roomCode);
+          }
         }
       } catch (error) {
         console.error('Error submitting category item:', error);
@@ -352,6 +539,12 @@ export function setupSocketHandlers(
           );
           io.to(room.roomCode).emit('game-state-update', room);
           startRoundTimer(room.roomCode, GAME_CONSTANTS.CATEGORY_TURN_TIME);
+
+          // Schedule CPU category item if it's now CPU's turn
+          if (roomManager.isCpuGame(room) &&
+              room.categoryState!.currentTurnPlayerId === CPU_PLAYER_ID) {
+            scheduleCpuCategoryItem(room.roomCode);
+          }
         }
       } catch (error) {
         console.error('Error passing turn:', error);
@@ -364,6 +557,7 @@ export function setupSocketHandlers(
       const result = roomManager.removePlayer(socket.id);
       if (result) {
         clearRoundTimer(result.room.roomCode);
+        clearCpuTimer(result.room.roomCode);
         socket.leave(result.room.roomCode);
         io.to(result.room.roomCode).emit('player-left', socket.id);
         io.to(result.room.roomCode).emit('game-state-update', result.room);
@@ -375,6 +569,7 @@ export function setupSocketHandlers(
       const result = roomManager.removePlayer(socket.id);
       if (result) {
         clearRoundTimer(result.room.roomCode);
+        clearCpuTimer(result.room.roomCode);
         io.to(result.room.roomCode).emit('player-left', socket.id);
 
         // If game was in progress, end it

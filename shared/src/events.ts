@@ -5,6 +5,7 @@ export interface ClientToServerEvents {
   // Lobby
   'create-room': (playerName: string) => void;
   'join-room': (roomCode: string, playerName: string) => void;
+  'create-cpu-game': (playerName: string) => void;
   'player-ready': () => void;
   'start-game': () => void;
 

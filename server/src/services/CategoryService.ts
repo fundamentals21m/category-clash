@@ -166,4 +166,11 @@ export class CategoryService {
   getAllCategories(): string[] {
     return this.categories.map((c) => c.name);
   }
+
+  getValidItemsForCategory(categoryName: string): string[] | null {
+    const category = this.categories.find(
+      (c) => c.name.toLowerCase() === categoryName.toLowerCase()
+    );
+    return category ? category.validItems : null;
+  }
 }

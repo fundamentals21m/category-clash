@@ -26,6 +26,15 @@ export function useGameSocket() {
     [dispatch, socket]
   );
 
+  const createCpuGame = useCallback(
+    (playerName: string) => {
+      dispatch({ type: 'SET_PLAYER_NAME', payload: playerName });
+      dispatch({ type: 'CLEAR_ERROR' });
+      socket?.emit('create-cpu-game', playerName);
+    },
+    [dispatch, socket]
+  );
+
   const setReady = useCallback(() => {
     socket?.emit('player-ready');
   }, [socket]);
@@ -57,6 +66,7 @@ export function useGameSocket() {
     isConnected: state.isConnected,
     createRoom,
     joinRoom,
+    createCpuGame,
     setReady,
     startGame,
     submitTriviaAnswer,

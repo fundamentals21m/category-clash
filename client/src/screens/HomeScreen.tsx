@@ -2,18 +2,24 @@ import { useState } from 'react';
 import { useGameSocket } from '../hooks/useGameSocket';
 import { useGame } from '../context/GameContext';
 
-type Mode = 'home' | 'create' | 'join';
+type Mode = 'home' | 'create' | 'join' | 'cpu';
 
 export default function HomeScreen() {
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [mode, setMode] = useState<Mode>('home');
-  const { createRoom, joinRoom, isConnected } = useGameSocket();
+  const { createRoom, joinRoom, createCpuGame, isConnected } = useGameSocket();
   const { state } = useGame();
 
   const handleCreate = () => {
     if (playerName.trim()) {
       createRoom(playerName.trim());
+    }
+  };
+
+  const handleCpuGame = () => {
+    if (playerName.trim()) {
+      createCpuGame(playerName.trim());
     }
   };
 
@@ -49,6 +55,13 @@ export default function HomeScreen() {
       {mode === 'home' && (
         <div className="space-y-4 w-full max-w-xs">
           <button
+            onClick={() => setMode('cpu')}
+            disabled={!isConnected}
+            className="w-full py-4 bg-success hover:bg-success/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold text-lg transition"
+          >
+            Play vs CPU
+          </button>
+          <button
             onClick={() => setMode('create')}
             disabled={!isConnected}
             className="w-full py-4 bg-primary hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold text-lg transition"
@@ -61,6 +74,34 @@ export default function HomeScreen() {
             className="w-full py-4 bg-secondary hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold text-lg transition"
           >
             Join Game
+          </button>
+        </div>
+      )}
+
+      {mode === 'cpu' && (
+        <div className="space-y-4 w-full max-w-xs">
+          <input
+            type="text"
+            placeholder="Your Name"
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            onKeyDown={(e) => handleKeyDown(e, handleCpuGame)}
+            className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-success focus:outline-none"
+            maxLength={20}
+            autoFocus
+          />
+          <button
+            onClick={handleCpuGame}
+            disabled={!playerName.trim() || !isConnected}
+            className="w-full py-4 bg-success hover:bg-success/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold text-lg transition"
+          >
+            Start vs CPU
+          </button>
+          <button
+            onClick={() => setMode('home')}
+            className="w-full py-2 text-gray-400 hover:text-white transition"
+          >
+            Back
           </button>
         </div>
       )}

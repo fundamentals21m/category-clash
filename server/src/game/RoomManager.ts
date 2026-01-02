@@ -136,4 +136,46 @@ export class RoomManager {
       room.players[1].isReady
     );
   }
+
+  createCpuGame(hostId: string, hostName: string): GameState {
+    const roomCode = this.generateRoomCode();
+    const host: Player = {
+      id: hostId,
+      name: hostName,
+      role: PlayerRole.HOST,
+      isConnected: true,
+      isReady: true
+    };
+
+    const cpu: Player = {
+      id: 'CPU_PLAYER',
+      name: 'CPU',
+      role: PlayerRole.GUEST,
+      isConnected: true,
+      isReady: true
+    };
+
+    const gameState: GameState = {
+      roomCode,
+      phase: GamePhase.LOBBY,
+      players: [host, cpu],
+      score: 0,
+      currentRound: 0,
+      maxRounds: GAME_CONSTANTS.MAX_ROUNDS,
+      triviaState: null,
+      categoryState: null,
+      lastRoundWinner: null,
+      lastRoundPointChange: 0,
+      roundStartTime: null,
+      turnStartTime: null
+    };
+
+    this.rooms.set(roomCode, gameState);
+    this.playerToRoom.set(hostId, roomCode);
+    return gameState;
+  }
+
+  isCpuGame(room: GameState): boolean {
+    return room.players[1]?.id === 'CPU_PLAYER';
+  }
 }
