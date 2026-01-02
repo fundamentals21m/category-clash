@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CpuDifficulty } from '@category-clash/shared';
 import { useGame } from '../context/GameContext';
 import { useSocket } from '../context/SocketContext';
 
@@ -27,10 +28,10 @@ export function useGameSocket() {
   );
 
   const createCpuGame = useCallback(
-    (playerName: string) => {
+    (playerName: string, difficulty: CpuDifficulty) => {
       dispatch({ type: 'SET_PLAYER_NAME', payload: playerName });
       dispatch({ type: 'CLEAR_ERROR' });
-      socket?.emit('create-cpu-game', playerName);
+      socket?.emit('create-cpu-game', playerName, difficulty);
     },
     [dispatch, socket]
   );

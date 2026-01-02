@@ -1,11 +1,11 @@
-import type { GameState, Player, TriviaQuestion } from './types.js';
+import type { GameState, Player, TriviaQuestion, CpuDifficulty } from './types.js';
 
 // ========== Client -> Server Events ==========
 export interface ClientToServerEvents {
   // Lobby
   'create-room': (playerName: string) => void;
   'join-room': (roomCode: string, playerName: string) => void;
-  'create-cpu-game': (playerName: string) => void;
+  'create-cpu-game': (playerName: string, difficulty: CpuDifficulty) => void;
   'player-ready': () => void;
   'start-game': () => void;
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CpuDifficulty } from '@category-clash/shared';
 import { useGameSocket } from '../hooks/useGameSocket';
 import { useGame } from '../context/GameContext';
 
@@ -8,6 +9,7 @@ export default function HomeScreen() {
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [mode, setMode] = useState<Mode>('home');
+  const [difficulty, setDifficulty] = useState<CpuDifficulty>(CpuDifficulty.MEDIUM);
   const { createRoom, joinRoom, createCpuGame, isConnected } = useGameSocket();
   const { state } = useGame();
 
@@ -19,7 +21,7 @@ export default function HomeScreen() {
 
   const handleCpuGame = () => {
     if (playerName.trim()) {
-      createCpuGame(playerName.trim());
+      createCpuGame(playerName.trim(), difficulty);
     }
   };
 
@@ -90,6 +92,41 @@ export default function HomeScreen() {
             maxLength={20}
             autoFocus
           />
+          <div className="space-y-2">
+            <label className="text-sm text-gray-400">Difficulty</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDifficulty(CpuDifficulty.EASY)}
+                className={`flex-1 py-2 rounded-lg font-medium transition ${
+                  difficulty === CpuDifficulty.EASY
+                    ? 'bg-green-500 text-white'
+                    : 'bg-dark border border-gray-700 text-gray-400 hover:border-green-500'
+                }`}
+              >
+                Easy
+              </button>
+              <button
+                onClick={() => setDifficulty(CpuDifficulty.MEDIUM)}
+                className={`flex-1 py-2 rounded-lg font-medium transition ${
+                  difficulty === CpuDifficulty.MEDIUM
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-dark border border-gray-700 text-gray-400 hover:border-yellow-500'
+                }`}
+              >
+                Medium
+              </button>
+              <button
+                onClick={() => setDifficulty(CpuDifficulty.HARD)}
+                className={`flex-1 py-2 rounded-lg font-medium transition ${
+                  difficulty === CpuDifficulty.HARD
+                    ? 'bg-red-500 text-white'
+                    : 'bg-dark border border-gray-700 text-gray-400 hover:border-red-500'
+                }`}
+              >
+                Hard
+              </button>
+            </div>
+          </div>
           <button
             onClick={handleCpuGame}
             disabled={!playerName.trim() || !isConnected}

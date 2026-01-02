@@ -3,6 +3,7 @@ import {
   ClientToServerEvents,
   ServerToClientEvents,
   GamePhase,
+  CpuDifficulty,
   GAME_CONSTANTS
 } from '@category-clash/shared';
 import { RoomManager } from '../game/RoomManager.js';
@@ -36,19 +37,22 @@ export function setupSocketHandlers(
     const room = roomManager.getRoom(roomCode);
     if (!room || !roomManager.isCpuGame(room)) return;
     if (room.phase !== GamePhase.TRIVIA || !room.triviaState) return;
+    if (!room.cpuDifficulty) return;
 
     clearCpuTimer(roomCode);
 
-    const delay = cpuPlayerService.getResponseDelay();
+    const difficulty = room.cpuDifficulty;
+    const delay = cpuPlayerService.getResponseDelay(difficulty);
     const timer = setTimeout(async () => {
       const currentRoom = roomManager.getRoom(roomCode);
       if (!currentRoom || currentRoom.phase !== GamePhase.TRIVIA) return;
-      if (!currentRoom.triviaState) return;
+      if (!currentRoom.triviaState || !currentRoom.cpuDifficulty) return;
 
       const question = currentRoom.triviaState.question;
       const cpuAnswer = cpuPlayerService.getCpuTriviaAnswer(
         question.correctAnswer,
-        question.allAnswers
+        question.allAnswers,
+        currentRoom.cpuDifficulty
       );
 
       const { bothAnswered } = gameStateMachine.processTriviaAnswer(
@@ -73,19 +77,21 @@ export function setupSocketHandlers(
     if (!room || !roomManager.isCpuGame(room)) return;
     if (room.phase !== GamePhase.CATEGORY_BATTLE || !room.categoryState) return;
     if (room.categoryState.currentTurnPlayerId !== CPU_PLAYER_ID) return;
+    if (!room.cpuDifficulty) return;
 
     clearCpuTimer(roomCode);
 
-    const delay = cpuPlayerService.getResponseDelay();
+    const difficulty = room.cpuDifficulty;
+    const delay = cpuPlayerService.getResponseDelay(difficulty);
     const timer = setTimeout(async () => {
       const currentRoom = roomManager.getRoom(roomCode);
       if (!currentRoom || currentRoom.phase !== GamePhase.CATEGORY_BATTLE) return;
-      if (!currentRoom.categoryState) return;
+      if (!currentRoom.categoryState || !currentRoom.cpuDifficulty) return;
       if (currentRoom.categoryState.currentTurnPlayerId !== CPU_PLAYER_ID) return;
 
       const category = currentRoom.categoryState.category;
       const usedItems = currentRoom.categoryState.usedItems.map(i => i.value);
-      const cpuItem = cpuPlayerService.getCpuCategoryItem(category, usedItems);
+      const cpuItem = cpuPlayerService.getCpuCategoryItem(category, usedItems, currentRoom.cpuDifficulty);
 
       if (!cpuItem) {
         // CPU passes
@@ -345,13 +351,13 @@ export function setupSocketHandlers(
       }
     });
 
-    socket.on('create-cpu-game', async (playerName) => {
+    socket.on('create-cpu-game', async (playerName, difficulty) => {
       try {
-        const gameState = roomManager.createCpuGame(socket.id, playerName);
+        const gameState = roomManager.createCpuGame(socket.id, playerName, difficulty);
         socket.join(gameState.roomCode);
         socket.emit('room-created', gameState.roomCode);
         socket.emit('game-state-update', gameState);
-        console.log(`CPU game ${gameState.roomCode} created by ${playerName}`);
+        console.log(`CPU game ${gameState.roomCode} created by ${playerName} (${difficulty})`);
 
         // Auto-start the game after a short delay
         setTimeout(async () => {

@@ -3,6 +3,7 @@ import {
   GamePhase,
   Player,
   PlayerRole,
+  CpuDifficulty,
   GAME_CONSTANTS
 } from '@category-clash/shared';
 
@@ -44,7 +45,8 @@ export class RoomManager {
       lastRoundWinner: null,
       lastRoundPointChange: 0,
       roundStartTime: null,
-      turnStartTime: null
+      turnStartTime: null,
+      cpuDifficulty: null
     };
 
     this.rooms.set(roomCode, gameState);
@@ -137,7 +139,7 @@ export class RoomManager {
     );
   }
 
-  createCpuGame(hostId: string, hostName: string): GameState {
+  createCpuGame(hostId: string, hostName: string, difficulty: CpuDifficulty): GameState {
     const roomCode = this.generateRoomCode();
     const host: Player = {
       id: hostId,
@@ -147,9 +149,15 @@ export class RoomManager {
       isReady: true
     };
 
+    const difficultyLabels = {
+      [CpuDifficulty.EASY]: 'Easy',
+      [CpuDifficulty.MEDIUM]: 'Medium',
+      [CpuDifficulty.HARD]: 'Hard'
+    };
+
     const cpu: Player = {
       id: 'CPU_PLAYER',
-      name: 'CPU',
+      name: `CPU (${difficultyLabels[difficulty]})`,
       role: PlayerRole.GUEST,
       isConnected: true,
       isReady: true
@@ -167,7 +175,8 @@ export class RoomManager {
       lastRoundWinner: null,
       lastRoundPointChange: 0,
       roundStartTime: null,
-      turnStartTime: null
+      turnStartTime: null,
+      cpuDifficulty: difficulty
     };
 
     this.rooms.set(roomCode, gameState);

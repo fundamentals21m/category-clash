@@ -12,6 +12,12 @@ export enum PlayerRole {
   GUEST = 'guest'
 }
 
+export enum CpuDifficulty {
+  EASY = 'easy',
+  MEDIUM = 'medium',
+  HARD = 'hard'
+}
+
 // ========== Player Types ==========
 export interface Player {
   id: string;
@@ -76,6 +82,9 @@ export interface GameState {
   // Timing
   roundStartTime: number | null;
   turnStartTime: number | null;
+
+  // CPU game settings
+  cpuDifficulty: CpuDifficulty | null;
 }
 
 // ========== API Response Types ==========
